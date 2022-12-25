@@ -24,7 +24,9 @@ PYTHON_JSON_TYPE_MAP = {
 class QueryType(Enum):
     SIMPLE = 0
     SEARCH = 1
-    UNFOLD = 2
+
+
+has_item = False
 
 
 def main(wf):
@@ -36,17 +38,18 @@ def main(wf):
 
     json_dict = load_json(text)
     if json_dict is None:
-        wf.add_item(title="Can not read json from clipboard", valid=False)
+        add_item(wf, title="can not read json from clipboard", valid=False)
         wf.send_feedback()
         return
 
     if query_type == QueryType.SIMPLE:
-        wf.add_item(title=text, arg=generate_output(load_json(text)), valid=True,
-                    subtitle="Followed raw are key value of clipboard JSON")
+        add_item(wf, title=text, output=generate_output(load_json(text)), valid=True,
+                 subtitle="following rows are key-value pairs of clipboard object")
 
-    items = []
     for i in range(len(paths)):
-        items = []
+        json_dict = load_json(text)
+        if not isinstance(json_dict, dict):
+            break
         for k in sorted(json_dict.keys()):
             v = json_dict[k]
             if i != len(paths) - 1:
@@ -55,32 +58,23 @@ def main(wf):
                     text = v
                     break
             else:
-                if query_type == QueryType.SEARCH or query_type == QueryType.SIMPLE:
-                    # 最后一个path模糊搜索
-                    if k.lower().find(paths[i].lower()) == -1:
-                        continue
-                    items.append((k, v))
-                elif query_type == QueryType.UNFOLD:
-                    # 最后一个path展开
-                    if k.lower() == paths[i]:
-                        if type(v) is dict:
-                            for sk in sorted(v.keys()):
-                                items.append((sk, v[sk]))
-                        elif check_if_escape_json_dict(v):
-                            unfold_json_dict = load_json(v)
-                            for sk in sorted(unfold_json_dict.keys()):
-                                items.append((sk, unfold_json_dict[sk]))
-                        else:
-                            items.append((k, v))
+                # 最后一个path模糊搜索
+                if k.lower().find(paths[i].lower()) == -1:
+                    continue
+                if k.lower() != paths[i].lower():
+                    add_item(wf, title=k + get_type_name(v) + ": " + generate_output(v),
+                             output=build_predict_output(k, paths),
+                             autocomplete=build_autocomplete(k, paths),
+                             subtitle="press enter to fill in the search box")
+                else:
+                    text = v
+                    add_item(wf,
+                             title=k + get_type_name(v) + ": " + generate_output(v),
+                             output=generate_output(v),
+                             subtitle="press enter to show in web browser")
 
-    if len(items) == 0:
-        add_item(wf, "error", "path error")
-
-    for item in items:
-        paths = query.split('>')[:-1]
-        paths.append(str(item[0]))
-        auto = ">".join(paths)
-        add_item(wf, item[0] + get_type_name(item[1]), generate_output(item[1]), generate_output(item[1], 4), auto)
+    if not has_item:
+        add_item(wf, title="path error", valid=False)
 
     wf.send_feedback()
 
@@ -92,16 +86,17 @@ def get_type_name(item):
     return '(' + PYTHON_JSON_TYPE_MAP.get(py_type_name, 'unknown') + ')'
 
 
-def add_item(wf, prefix, result, output=None, auto=None):
-    title = '{}: {}'.format(prefix, result)
-    wf.add_item(title=title, arg=output, valid=True, autocomplete=auto)
+def add_item(wf, title, output=None, subtitle=None, valid=True, autocomplete=None):
+    global has_item
+    has_item = True
+    if subtitle is None:
+        subtitle = ""
+    wf.add_item(title=title, subtitle=subtitle, arg=output, valid=valid, autocomplete=autocomplete)
 
 
 def parse_input(key):
     if key.strip() == "":
         return QueryType.SIMPLE, [""]
-    if key.endswith('>'):
-        return QueryType.UNFOLD, key.strip().split('>')[:-1]
     return QueryType.SEARCH, key.strip().split('>')
 
 
@@ -146,6 +141,20 @@ def check_if_escape_json_dict(data):
     except Exception:
         return False
     return True
+
+
+def build_predict_output(k, paths):
+    path = ">".join(paths[:-1])
+    if path.strip() != "":
+        path = path + ">"
+    return "json " + path + k
+
+
+def build_autocomplete(k, paths):
+    path = ">".join(paths[:-1])
+    if path.strip() != "":
+        path = path + ">"
+    return path + k
 
 
 if __name__ == '__main__':
