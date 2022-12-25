@@ -65,7 +65,7 @@ def main(wf):
                     add_item(wf, title=k + get_type_name(v) + ": " + generate_output(v),
                              output=build_predict_output(k, paths),
                              autocomplete=build_autocomplete(k, paths),
-                             subtitle="press enter to fill in the search box")
+                             subtitle="press enter/tab to fill in the search box")
                 else:
                     text = v
                     add_item(wf,
