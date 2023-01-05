@@ -33,7 +33,7 @@ def main(wf):
     query = str(wf.args[0])
     query_type, paths = parse_input(query)
 
-    clipboard_text = str(pyperclip.paste())
+    clipboard_text = pyperclip.paste().encode('utf-8')
     text = parse_text(clipboard_text.strip())
 
     json_dict = load_json(text)
